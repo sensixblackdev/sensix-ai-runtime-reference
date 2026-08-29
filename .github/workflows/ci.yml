@@ -20,6 +20,8 @@ jobs:
       - run: pip install -r docker/gateway/requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: docker compose -f docker/compose.pod-h100.yml config >/dev/null
+        env:
+          SENSIX_GATEWAY_API_KEY: ci-only-placeholder
 
   publish-gateway:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
