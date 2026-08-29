@@ -1,0 +1,58 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.28.0
+    restart: unless-stopped
+    ipc: host
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_LOGGING_LEVEL: INFO
+    command:
+      - --model
+      - openai/gpt-oss-120b
+      - --served-model-name
+      - ${SENSIX_MODEL_ID:-gpt-oss-120b}
+      - --max-model-len
+      - "32768"
+      - --gpu-memory-utilization
+      - "0.92"
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - openai
+      - --disable-log-requests
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 15m
+
+  gateway:
+    build:
+      context: ./gateway
+    image: ghcr.io/sensixblackdev/sensix-ai-runtime-gateway:local
+    restart: unless-stopped
+    depends_on:
+      vllm:
+        condition: service_healthy
+    environment:
+      SENSIX_GATEWAY_API_KEY: ${SENSIX_GATEWAY_API_KEY:?set-in-env-file}
+      VLLM_UPSTREAMS: ${VLLM_UPSTREAMS:-http://vllm:8000}
+      SENSIX_MODEL_ID: ${SENSIX_MODEL_ID:-gpt-oss-120b}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  hf-cache:
+  vllm-cache:
